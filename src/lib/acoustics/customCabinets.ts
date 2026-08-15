@@ -98,27 +98,30 @@ export function normalizeSpec(raw: Record<string, unknown>): NormalizeResult {
     d: d!,
     kg: kg!,
     hCov: hCov!,
-    vCov: num(raw["vCov"] ?? raw["verticalCoverage"]),
     splayMin: num(raw["splayMin"], 0)!,
     splayMax: num(raw["splayMax"], kind === "array" ? 10 : 0)!,
-    qtyMax: num(raw["qtyMax"]),
-    rigFrame: (raw["rigFrame"] as string) || undefined,
     mounting: (["flown", "stacked", "stack-only"].includes(mountingRaw)
       ? mountingRaw
       : "flown") as Cabinet["mounting"],
     lowCut: lowCut!,
-    hiCut: num(raw["hiCut"] ?? raw["fHigh"] ?? raw["highFreq"]),
     amp: num(raw["amp"], 2)!,
     ampCh: num(raw["ampCh"] ?? raw["ampChannels"], kind === "array" ? 2 : 1)!,
-    ampModel: (raw["ampModel"] as string) || undefined,
-    ampMode: (raw["ampMode"] as string) || undefined,
     cardioid: raw["cardioid"] === true || String(raw["cardioid"] ?? "").toLowerCase() === "true",
     maxSplOct,
     balloons: null,
     estimated: true,
     source: (raw["source"] as string) || "User supplied spec sheet",
   };
-  if (spec.vCov === undefined) delete spec.vCov;
+  const vCov = num(raw["vCov"] ?? raw["verticalCoverage"]);
+  if (vCov !== undefined) spec.vCov = vCov;
+  const qtyMax = num(raw["qtyMax"]);
+  if (qtyMax !== undefined) spec.qtyMax = qtyMax;
+  const hiCut = num(raw["hiCut"] ?? raw["fHigh"] ?? raw["highFreq"]);
+  if (hiCut !== undefined) spec.hiCut = hiCut;
+  if (raw["rigFrame"]) spec.rigFrame = String(raw["rigFrame"]);
+  if (raw["ampModel"]) spec.ampModel = String(raw["ampModel"]);
+  if (raw["ampMode"]) spec.ampMode = String(raw["ampMode"]);
+
 
   return { ok: true, errors: [], cabinet: { key, name: name || key, manufacturer, spec } };
 }
