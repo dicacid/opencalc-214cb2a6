@@ -101,8 +101,9 @@ export function normalizeSpec(raw: Record<string, unknown>): NormalizeResult {
     splayMin: num(raw["splayMin"], 0)!,
     splayMax: num(raw["splayMax"], kind === "array" ? 10 : 0)!,
     mounting: (["flown", "stacked", "stack-only"].includes(mountingRaw)
-      ? mountingRaw
-      : "flown") as Cabinet["mounting"],
+      ? (mountingRaw as "flown" | "stacked" | "stack-only")
+      : "flown"),
+
     lowCut: lowCut!,
     amp: num(raw["amp"], 2)!,
     ampCh: num(raw["ampCh"] ?? raw["ampChannels"], kind === "array" ? 2 : 1)!,
