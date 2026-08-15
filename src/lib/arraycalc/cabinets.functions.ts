@@ -29,7 +29,7 @@ export const saveUserCabinet = createServerFn({ method: "POST" })
         cab_key: data.key,
         name: data.name,
         manufacturer: data.manufacturer ?? null,
-        spec: data.spec as unknown as Record<string, unknown>,
+        spec: data.spec as never,
       },
       { onConflict: "user_id,cab_key" },
     );
@@ -54,5 +54,5 @@ export const extractCabinetSpec = createServerFn({ method: "POST" })
   .inputValidator((data: ExtractInput) => data)
   .handler(async ({ data }) => {
     const { extractSpecFields } = await import("./cabinetSpec.server");
-    return await extractSpecFields(data);
+    return JSON.stringify(await extractSpecFields(data));
   });
