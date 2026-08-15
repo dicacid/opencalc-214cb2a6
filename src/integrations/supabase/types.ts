@@ -14,7 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      user_cabinets: {
+        Row: {
+          cab_key: string
+          created_at: string
+          id: string
+          manufacturer: string | null
+          name: string
+          spec: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cab_key: string
+          created_at?: string
+          id?: string
+          manufacturer?: string | null
+          name: string
+          spec: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cab_key?: string
+          created_at?: string
+          id?: string
+          manufacturer?: string | null
+          name?: string
+          spec?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
