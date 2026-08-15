@@ -243,7 +243,7 @@ const MENUS = {
   ['3D plot', '', 'tab:plot3d'], ['Rigging plot', '', 'tab:rigging'], ['Parts list', '', 'tab:parts']],
   Array: [['Add array', '', 'add'], ['Delete array', 'Del', 'del'], ['Copy array', 'Ctrl+C', 'copy'],
   ['Paste array', 'Ctrl+V', 'paste'], null, ['Auto splay', 'F5', 'splay'], ['Compute Spatial Smoothing', 'F6', 'ap']],
-  Extras: [['Room settings…', '', 'room'], ['Reset all levels', '', 'reset'], ['Mute all', '', 'muteall']],
+  Extras: [['Cabinet library…', '', 'cabinets'], ['Room settings…', '', 'room'], ['Reset all levels', '', 'reset'], ['Mute all', '', 'muteall']],
   Help: [['About this tool', '', 'about']]
 };
 
@@ -261,7 +261,7 @@ function shell() {
     <span class="tsep"></span>
     ${tbtn('splay', 'splay', 'Auto splay')}${tbtn('ap', 'ap', 'Spatial Smoothing')}
     <span class="tsep"></span>
-    ${tbtn('noiz', 'noiz', 'To NoizCalc')}${tbtn('about', 'help', 'Help')}
+    ${tbtn('cabinets', 'add', 'Cabinets')}${tbtn('noiz', 'noiz', 'To NoizCalc')}${tbtn('about', 'help', 'Help')}
   </div>
   <div class="tabbar">
     ${TABS.map(([k, l]) => `<div class="tab" data-tab="${k}">${l}</div>`).join('')}
@@ -1522,7 +1522,8 @@ function act(id) {
     new: () => { defaultProject(); invalidate(); render(); },
     open: openProject, save: saveProject, csv: csvExport, noiz: noizDialog,
     add: addSource, del: delSource, copy: copySource, paste: pasteSource,
-    splay: runSplay, ap: runAP, about: aboutDialog, alignAll, venuePreset,
+    splay: runSplay, ap: runAP, about: aboutDialog,
+    cabinets: () => cabinetDialog(scope() === document ? document.body : scope()), alignAll, venuePreset,
     alignClear: () => { S.sources.forEach(s => s.delay = 0); invalidate(); render(); },
     room: () => { S.tab = 'venue'; render(); },
     reset: () => { S.sources.forEach(s => { s.gain = 0; s.cabs.forEach(c => { c.level = 0; c.cpl = 0; c.hfc = 0; c.cut = false; }); }); invalidate(); render(); },
@@ -1632,6 +1633,7 @@ export function bootArrayCalc(root) {
   bindGlobal();
   render();
   setTimeout(() => paint(), 120);
+  void initCabinetLibrary(() => { invalidate(); render(); });
 }
 
 
