@@ -4,6 +4,8 @@
    predicted SPL output is bit-identical to the pre-port engine. */
 import { P } from "../acoustics";
 import { AMPS, ampChannels, ampModelOf, ampsRequired, validateSource } from "../acoustics/cabinets";
+import { cabinetDialog, initCabinetLibrary } from "./cabinetLibrary";
+
 
 const {CABINETS, CAB_LIST, MAP_BANDS, OCT, REF_R, SUB_MODES, THIRD_OCT, aWeight, airAlpha, audienceLine, autoSplay, bandSpl, bandsSum, broadband, buildAll, buildSource, buildSubArray, emissionSpectrum, frontToBack, horizDir, makeArrayProcessing, mapPlane, maxSplAt, nSub, planeCorners, planeGrid, planePoint, planeStats, prepFrames, pressureAt, refCache, refPressure, rigging, segDir, soundSpeed, splAt, subPolar, vertPointDir, voicingGain} = P;
 
