@@ -178,3 +178,28 @@ table.grid tfoot td{background:var(--panel-hd);font-weight:700;color:#fff}
 .ac-root input.bad{border-color:var(--bad);color:#ff9b8c;background:#3a2422}
 .ac-root .disclaimer{padding:6px 8px;color:var(--ink-mute);line-height:1.5}
 .ac-root .statusbar #stRig{margin-left:10px}
+
+/* ---------- cabinet library dialog ---------- */
+.ac-root .cf-acct{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-mute);
+  padding:6px 8px;margin-bottom:8px;background:var(--field);border:1px solid var(--line);border-radius:3px}
+.ac-root .cf-acct b{color:var(--ink)}
+.ac-root .cf-msg{font-size:11px;color:var(--ink);background:var(--panel-2,var(--field));
+  border-left:2px solid var(--accent,#8ab4f8);padding:5px 8px;margin-bottom:8px}
+.ac-root .cf-note{font-size:10px;color:var(--ink-mute);flex:1;text-align:left}
+.ac-root .cf-empty{font-size:11px;color:var(--ink-mute);padding:14px 4px}
+.ac-root .cf-sub{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);margin:10px 0 4px}
+.ac-root .cf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px 10px}
+.ac-root .cf-grid .f{display:flex;flex-direction:column;gap:2px}
+.ac-root .cf-grid .f label{font-size:10px;color:var(--ink-mute)}
+.ac-root .cf-grid .f input,.ac-root .cf-grid .f select,.ac-root .cf-auth input{
+  background:var(--field);border:1px solid var(--line);color:var(--ink);font:inherit;font-size:11px;padding:3px 5px;border-radius:2px}
+.ac-root .cf-list{display:flex;flex-direction:column;gap:2px}
+.ac-root .cf-row{display:grid;grid-template-columns:90px 1fr 1fr auto auto;align-items:center;gap:6px;
+  font-size:11px;padding:4px 6px;background:var(--field);border:1px solid var(--line);border-radius:2px}
+.ac-root .cf-row span{color:var(--ink-mute)}
+.ac-root .cf-auth{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 10px}
+.ac-root .cf-auth .f{display:flex;flex-direction:column;gap:2px}
+.ac-root .cf-auth .f label{font-size:10px;color:var(--ink-mute)}
+.ac-root .cf-auth .r{grid-column:1/-1}
+.ac-root .cf-paste textarea{width:100%;background:var(--field);border:1px solid var(--line);
+  color:var(--ink);font:inherit;font-size:11px;padding:6px;border-radius:2px;resize:vertical}
