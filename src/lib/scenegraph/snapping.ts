@@ -53,7 +53,7 @@ export function snap(ctx: SnapContext): SnapResult {
     const q = project(p);
     if (!q) return;
     const px = Math.hypot(q[0] - cursor[0], q[1] - cursor[1]);
-    if (px <= tol) out.push({ kind, p, px, ref });
+    if (px <= tol) out.push(ref === undefined ? { kind, p, px } : { kind, p, px, ref });
   };
 
   // 1 endpoints
