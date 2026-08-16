@@ -1,55 +1,59 @@
-# A real 3D modelling workspace for the array planner
+# Environment switcher + a Stage Tracing workspace grounded in the research
 
-You're right — I built both of the existing 3D environments on Cadence Ops. I pulled a read-only snapshot of that project and checked them, so this plan matches those conventions instead of inventing a third dialect:
+Two things in one pass: the drop-down you asked for, and the first real environment behind it — built from the technical signal in the StageTrace shortlist rather than from scratch.
 
-- **Stage layout editor** (`src/components/stages/editor/`) — R3F `Canvas`, `OrbitControls`, drei `Grid`, `ShapeMesh` per object, pointer-down selection with shift-additive multi-select, drag-move with grid/deck/truss snapping, `camera-presets.ts` (front of house, stage left/right, backstage, top-down ortho, audience eye), object inspector + outliner + warnings panel.
-- **Mapping viewer** (`src/components/mapping/MappingViewer.tsx`) — read-only viewer reusing `ShapeMesh`, perspective camera framed from the ground span, ACES tone mapping, fog, hemisphere + directional rig.
-- Stack there: `three ^0.185`, `@react-three/fiber ^9`, `@react-three/drei ^10`. Y-up, metres, +Z toward the audience, +X stage right.
+## What the PDF is actually worth to us
 
-## What's actually in this app today
+The document is an outreach list, but the credibility notes describe, between them, a complete and public technique stack. Extracted and turned into build direction:
 
-The "3D plot" is not a 3D environment. `paint3d`/`paintVenue3d` in `src/lib/arraycalc/app.ts` are 2D-canvas painters using an orthographic `proj3(az, el)` with a painter's-algorithm quad sort. There's no perspective, no zoom, no pan, no picking, no cabinet geometry (arrays draw as a 6 px square), no rigging, no venue shell. Drag only changes two angles.
+| Signal in the document | What we take from it |
+| --- | --- |
+| Rezwan's `segment-everything-td` — SAM 2/3 + YOLO11-seg auto-masking projection surfaces from a photo | Auto-trace is a solved primitive. Photo in, per-surface masks out. Runs in-browser via ONNX Runtime Web on WebGPU, or server-side through the AI gateway we already use for datasheet extraction. |
+| Kurth — auto-calibration on *consumer* hardware by inverting a structured-light scan, single pass | The calibration maths to implement against, chosen for exactly our cost constraint. |
+| Grundhöfer — ISMAR 2017 self-calibration, no human parameter tuning, 1 to 30 devices | The reliability bar and the multi-device generalisation. |
+| Iwai + Grundhöfer — Eurographics STAR on projection mapping algorithms | The single survey to work from before writing any calibration code. |
+| Iwai — neural projection mapping, joint geometric + defocus correction | The later upgrade path once the classical pass works. Not sprint one. |
+| Heckaman's GSOPs — .ply/.spz Gaussian splats live at 60 fps | The venue-capture format. A splat or point-cloud import gives both the acoustic solver and the mapping view a real venue shell. |
+| Watanabe — DynaFlash, 1000 fps deformable tracking | Scope boundary: static stages only. Moving sets are an order of magnitude harder and explicitly out. |
+| van der Ploeg / Resolume, MadMapper, Disguise OmniCal | The interop targets. Resolume first — biggest touring install base. |
+| VIOSO spun out of Bimber's group; Disguise ships OmniCal | Auto-alignment already ships commercially. Our differentiator is that acoustics and optics share one venue model — nobody in the list does both. |
 
-## The change
+All of it is published research and open-source work, so the same IP posture we took on the d&b physics holds: implement from the papers, clone no vendor's pipeline, use no vendor's naming.
 
-Replace those two painters with one real R3F workspace, built to the Cadence Ops conventions above so the three environments feel like one product.
+The rankings, contact details and outreach strategy are go-to-market, not product — nothing to build from those. Worth keeping the file, though: the interop questions (what a Resolume handoff should look like, where segmentation breaks on real stage geometry) are exactly the ones the build will raise.
 
-### 1. Coordinate bridge
+## 1. The environment switcher
 
-The acoustics engine is Z-up with +Y toward the audience; Cadence Ops 3D is Y-up with +Z toward the audience. One small adapter module converts both ways (`three = [acX, acZ, acY]`), used everywhere, so `src/lib/acoustics/*` stays untouched and keeps producing identical numbers.
+A workspace picker at the far left of the menu bar, before File — the way a desktop suite selects document type. It switches the whole main area:
 
-### 2. Real geometry in the scene
+- **Array Calculator** — everything that exists today, unchanged.
+- **Stage Tracing** — new, below.
+- **Mapping** — projector placement and coverage. Stub in this pass, with the switcher entry present and disabled-with-a-note, so the shape is visible.
 
-Everything the solver already computes gets drawn as actual 3D objects:
+The existing tab strip (Venue / Arrays / 3D / …) stays, but becomes scoped to the selected environment. One project file, one venue model, one selection state across all three — that shared model is the whole point of putting them in one app.
 
-- **Cabinets** — one box per frame from `buildSource`, at true `w × h × d` from the cabinet spec, positioned and rotated by the frame's splay/tilt/azimuth. Tops, subs and muted boxes are visually distinct.
-- **Rigging** — bumper bar, the two pick-point lines up to a motor marker, CoG marker, and a red state when `rigging()` reports over-limit or an illegal splay.
-- **Listening planes** — real quads at their rake, with the SPL map painted onto them as a `DataTexture` from `mapPlane` values (same colour ramp as now), plus a wireframe when uncalculated.
-- **Venue context** — ground grid sized to the site, stage box, FOH marker at the reference point.
-- **Coverage** — optional translucent cone/fan per array showing nominal H/V coverage from the cabinet spec.
+## 2. Stage Tracing, first version
 
-### 3. Interaction
+- Upload a stage photo or plan and place it as a calibrated backdrop (two known points set scale).
+- Trace surfaces by hand — polygon tool, snapping, per-surface naming and material.
+- **Auto-segment**: one click runs a segmentation pass over the photo and proposes a mask per detected surface; every proposal is editable and rejectable. Runs server-side first via a server function, so it works before any WebGPU work.
+- Traced surfaces extrude into a 3D venue shell.
+- That shell feeds the acoustic solver directly as reflective geometry and listening-plane context — the payoff for keeping one model.
 
-- Orbit / pan / zoom via `OrbitControls`, with the same clamps as the mapping viewer.
-- Camera presets reusing the Cadence Ops preset names and framing maths: front of house, stage left/right, top-down (ortho), audience eye height, frame-all.
-- Click to select an array, a plane, or a single cabinet; selection highlights and drives the existing side panels. Shift-click additive, click-empty clears — same rules as the stage editor.
-- Drag a selected array or plane on the ground plane to reposition, with grid snap; the numeric fields update live and the solver map invalidates.
-- Gizmo-free rotate: drag with a modifier rotates azimuth in whole degrees.
-- Layer toggles (cabinets / rigging / planes / SPL / coverage / grid) and a small legend, matching the mapping viewer's control strip.
+Projector placement, structured-light calibration and Resolume export are deliberately not in this pass; they are the next environment.
 
-### 4. How it plugs into the existing shell
+## 3. The 3D workspace
 
-The app shell is imperative DOM (`app.ts`). The 3D view becomes a React island mounted into the `plot3d` tab's plot frame, with a thin bridge: the shell hands it the current sources/planes/env/selection and receives change and selection callbacks. The rest of the shell keeps working unchanged, and the venue tab's small wireframe is replaced by the same component in a read-only mode.
-
-`compute3d` keeps running the solver off the main thread path it uses today; the scene reads `cache.map` and re-textures the planes rather than recomputing.
+The R3F workspace from the previous plan still gets built, and now serves all three environments instead of only the array view: same scene, same camera presets, same Cadence Ops conventions — different tool overlays per environment. Coordinate bridge, cabinet and rigging geometry, SPL-textured listening planes, orbit/pan/zoom and selection all as previously specified.
 
 ## Technical notes
 
-- Add `three`, `@react-three/fiber`, `@react-three/drei` at the same major versions as Cadence Ops.
-- New files: `src/components/array3d/` (`Workspace3D.tsx`, `CabinetMesh.tsx`, `PlaneMesh.tsx`, `RiggingMesh.tsx`, `CoverageCone.tsx`, `camera-presets.ts`), `src/lib/arraycalc/coords.ts`, and a mount helper in `app.ts`.
-- SSR safety: the workspace is loaded lazily behind a client-only boundary; the acoustics modules stay SSR-safe.
-- No changes to `src/lib/acoustics/*` maths. A before/after SPL spot-check on the demo project confirms numbers are identical.
+- `three`, `@react-three/fiber`, `@react-three/drei` at the Cadence Ops versions.
+- New: `src/components/array3d/` (scene, camera presets, meshes), `src/components/stagetrace/` (backdrop, trace canvas, surface list), `src/lib/stagetrace/` (surface model, extrusion, photo calibration), `src/lib/stagetrace/segment.functions.ts` (server-side segmentation), `src/lib/arraycalc/coords.ts`.
+- Environment state lives in the existing imperative shell; the 3D and tracing views mount as React islands behind a client-only boundary.
+- Traced surfaces persist with the project, and to the cloud alongside the cabinet library for signed-in users.
+- No changes to `src/lib/acoustics/*` maths. SPL spot-check before and after confirms identical numbers.
 
-## Out of scope here
+## Out of scope
 
-Importing a Cadence Ops stage layout as the venue shell, VBO-level GPU SPL evaluation, and shared cross-app project storage — each worth doing, but after this workspace exists.
+Moving sets and high-speed tracking, neural calibration, Gaussian splat capture, projector auto-calibration, and Resolume/MadMapper export — each earned a place on the roadmap from the document, none belongs in this pass.
