@@ -1,59 +1,51 @@
-# Environment switcher + a Stage Tracing workspace grounded in the research
+# Environment switcher + a StageTrace workspace in this app
 
-Two things in one pass: the drop-down you asked for, and the first real environment behind it — built from the technical signal in the StageTrace shortlist rather than from scratch.
+Your architecture brief describes the mapping app as a Next.js / Prisma / Python-worker system at cadenceops.app/mapping. This project is a different stack — TanStack Start, server functions on Cloudflare Workers, Lovable Cloud Postgres — and no Python worker or long-running container can run here. So the plan below takes the brief's *design decisions* (which are the valuable part and are stack-neutral) and implements them natively, rather than porting its topology.
 
-## What the PDF is actually worth to us
-
-The document is an outreach list, but the credibility notes describe, between them, a complete and public technique stack. Extracted and turned into build direction:
-
-| Signal in the document | What we take from it |
-| --- | --- |
-| Rezwan's `segment-everything-td` — SAM 2/3 + YOLO11-seg auto-masking projection surfaces from a photo | Auto-trace is a solved primitive. Photo in, per-surface masks out. Runs in-browser via ONNX Runtime Web on WebGPU, or server-side through the AI gateway we already use for datasheet extraction. |
-| Kurth — auto-calibration on *consumer* hardware by inverting a structured-light scan, single pass | The calibration maths to implement against, chosen for exactly our cost constraint. |
-| Grundhöfer — ISMAR 2017 self-calibration, no human parameter tuning, 1 to 30 devices | The reliability bar and the multi-device generalisation. |
-| Iwai + Grundhöfer — Eurographics STAR on projection mapping algorithms | The single survey to work from before writing any calibration code. |
-| Iwai — neural projection mapping, joint geometric + defocus correction | The later upgrade path once the classical pass works. Not sprint one. |
-| Heckaman's GSOPs — .ply/.spz Gaussian splats live at 60 fps | The venue-capture format. A splat or point-cloud import gives both the acoustic solver and the mapping view a real venue shell. |
-| Watanabe — DynaFlash, 1000 fps deformable tracking | Scope boundary: static stages only. Moving sets are an order of magnitude harder and explicitly out. |
-| van der Ploeg / Resolume, MadMapper, Disguise OmniCal | The interop targets. Resolume first — biggest touring install base. |
-| VIOSO spun out of Bimber's group; Disguise ships OmniCal | Auto-alignment already ships commercially. Our differentiator is that acoustics and optics share one venue model — nobody in the list does both. |
-
-All of it is published research and open-source work, so the same IP posture we took on the d&b physics holds: implement from the papers, clone no vendor's pipeline, use no vendor's naming.
-
-The rankings, contact details and outreach strategy are go-to-market, not product — nothing to build from those. Worth keeping the file, though: the interop questions (what a Resolume handoff should look like, where segmentation breaks on real stage geometry) are exactly the ones the build will raise.
+What carries over unchanged: the canonical scenegraph as the single source of truth, immutable revision deltas, screen-space inference snapping, deterministic export with a validation pass, and AS/NZS compliance tracking sitting beside the geometry. What changes: server functions replace the Node API routes, the CV pass runs through the AI gateway or in-browser WebGPU instead of an OpenCV worker fleet, and R3F is used directly rather than under Next.
 
 ## 1. The environment switcher
 
-A workspace picker at the far left of the menu bar, before File — the way a desktop suite selects document type. It switches the whole main area:
+A workspace picker at the far left of the menu bar, before File — the desktop-suite pattern. It switches the main area between:
 
 - **Array Calculator** — everything that exists today, unchanged.
-- **Stage Tracing** — new, below.
-- **Mapping** — projector placement and coverage. Stub in this pass, with the switcher entry present and disabled-with-a-note, so the shape is visible.
+- **StageTrace** — spatial tracing and the canonical scenegraph. Built in this pass.
+- **Mapping** — projector placement, calibration, Resolume output. Entry present, disabled with a note, until StageTrace lands.
 
-The existing tab strip (Venue / Arrays / 3D / …) stays, but becomes scoped to the selected environment. One project file, one venue model, one selection state across all three — that shared model is the whole point of putting them in one app.
+The existing tab strip stays and becomes scoped to the selected environment. One project, one venue scenegraph, one selection state shared across all three — the acoustic solver and the optical model reading the same geometry is the thing no tool in the brief's competitive set does.
 
-## 2. Stage Tracing, first version
+## 2. StageTrace workspace
 
-- Upload a stage photo or plan and place it as a calibrated backdrop (two known points set scale).
-- Trace surfaces by hand — polygon tool, snapping, per-surface naming and material.
-- **Auto-segment**: one click runs a segmentation pass over the photo and proposes a mask per detected surface; every proposal is editable and rejectable. Runs server-side first via a server function, so it works before any WebGPU work.
-- Traced surfaces extrude into a 3D venue shell.
-- That shell feeds the acoustic solver directly as reflective geometry and listening-plane context — the payoff for keeping one model.
+**Canonical scenegraph.** Typed vertex / edge / face model, serialised as JSON, persisted per project. Faces carry hole loops as first-class data — respected by selection, triangulation, rendering and export, not as a visual mask. All edits go through shared commit operations that weld coincident points, split edges at new vertices, dedupe edges, and run face detection over connected planar cycles after every commit.
 
-Projector placement, structured-light calibration and Resolume export are deliberately not in this pass; they are the next environment.
+**Screen-space inference snapping**, in the brief's priority order: endpoint, midpoint, intersection, point-on-edge, parallel/perpendicular guide, point-on-face. Thresholds in screen pixels, so an endpoint is equally acquirable at 1 m and 100 m. Face ray tests respect hole loops so the ray passes through openings to geometry behind.
 
-## 3. The 3D workspace
+**Tracing.** Upload a stage photo or plan, calibrate scale from two known points, trace surfaces over it with line / rectangle / polygon tools routed through the same commit path. Closed loops inside a face become islands with a recorded hole.
 
-The R3F workspace from the previous plan still gets built, and now serves all three environments instead of only the array view: same scene, same camera presets, same Cadence Ops conventions — different tool overlays per environment. Coordinate bridge, cabinet and rigging geometry, SPL-textured listening planes, orbit/pan/zoom and selection all as previously specified.
+**Auto-segment.** One click proposes a mask per detected surface from the photo — server-function call through the AI gateway first, since that ships immediately and needs no worker fleet; in-browser SAM via ONNX Runtime Web on WebGPU as a later swap. Every proposal is editable and rejectable.
+
+**Revisions and diff.** Edits stored as immutable deltas with bounded in-memory history. A revision diff view compares two revisions mathematically and highlights moved geometry — the "the stage shifted 4 cm since the CAD" case from the brief.
+
+**Feeds the solver.** Traced surfaces extrude into the venue shell the acoustic engine already wants: reflective geometry and listening-plane context, no duplicate data model.
+
+## 3. Rendering
+
+One R3F workspace serving all three environments — same scene, same camera presets, same Cadence Ops conventions, different tool overlays per environment. Zustand holds tool, selection, hover and history so pointer movement never triggers a React render; the renderer watches model identity and updates only affected resources. Explicit geometry / material / texture disposal on unmount.
+
+For the Array Calculator this replaces the current 2D-canvas `paint3d` painters: real cabinet boxes at true w×h×d, rigging with pick points and CoG, SPL-textured listening planes, ground grid and stage box, orbit/pan/zoom and click selection.
+
+## 4. Compliance and export — scaffolded, not finished
+
+- **Compliance:** an AS/NZS 3002:2021 / AS/NZS 3760 checklist attached to the project — RCD and test-and-tag logs with tester, test date and renewal date, plus overhead-clearance zones drawn in the 3D scene that flag when a planned tower or array violates them. This one genuinely belongs here, because rigging load limits already live in this app.
+- **Export:** deterministic Truth Pack assembly — pure-TS compiler, identical input produces byte-identical output, aggressive overlap/gap/out-of-bounds validation before writing, ZIP containing the geometry plus an offline `viewer.html` findings report. GLTF/OBJ/JSON in this pass; Resolume Advanced Output XML, PIXERA, Disguise and Depence once the mapping environment exists.
 
 ## Technical notes
 
-- `three`, `@react-three/fiber`, `@react-three/drei` at the Cadence Ops versions.
-- New: `src/components/array3d/` (scene, camera presets, meshes), `src/components/stagetrace/` (backdrop, trace canvas, surface list), `src/lib/stagetrace/` (surface model, extrusion, photo calibration), `src/lib/stagetrace/segment.functions.ts` (server-side segmentation), `src/lib/arraycalc/coords.ts`.
-- Environment state lives in the existing imperative shell; the 3D and tracing views mount as React islands behind a client-only boundary.
-- Traced surfaces persist with the project, and to the cloud alongside the cabinet library for signed-in users.
-- No changes to `src/lib/acoustics/*` maths. SPL spot-check before and after confirms identical numbers.
+- Add `three`, `@react-three/fiber`, `@react-three/drei` at the Cadence Ops versions, plus `zustand` and a CSG library for Boolean face operations.
+- New: `src/lib/scenegraph/` (model, commit ops, face detection, snapping, revisions), `src/components/workspace3d/`, `src/components/stagetrace/`, `src/lib/stagetrace/segment.functions.ts`, `src/lib/exports/` (truth pack), `src/lib/arraycalc/coords.ts` for the Z-up ↔ Y-up bridge.
+- Scenegraph, revisions and compliance records persist to Lovable Cloud with RLS, alongside the existing cabinet library. Large artifacts go to storage, not the database.
+- Views mount as React islands behind a client-only boundary; `src/lib/acoustics/*` maths is untouched and spot-checked identical before and after.
 
-## Out of scope
+## Out of scope this pass
 
-Moving sets and high-speed tracking, neural calibration, Gaussian splat capture, projector auto-calibration, and Resolume/MadMapper export — each earned a place on the roadmap from the document, none belongs in this pass.
+Neural projection mapping, projector auto-calibration, Gaussian splat ingestion, tdmcp/TouchDesigner orchestration, VLM advisory and capacity modelling. All are on the roadmap the brief sets out; none is buildable before the scenegraph exists.
