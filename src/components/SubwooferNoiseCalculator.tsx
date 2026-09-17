@@ -29,16 +29,7 @@ function fmt(value: number, digits = 1) {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-function NumericField({
-  label,
-  value,
-  onChange,
-  unit,
-  min,
-  max,
-  step = 1,
-  hint,
-}: {
+function NumericField({ label, value, onChange, unit, min, max, step = 1, hint }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
@@ -67,14 +58,7 @@ function NumericField({
   );
 }
 
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-  disabled,
-  hint,
-}: {
+function SelectField({ label, value, onChange, options, disabled, hint }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -113,25 +97,27 @@ export function SubwooferNoiseCalculator() {
   const [uncertainty, setUncertainty] = useState(3);
   const [criterion, setCriterion] = useState(75);
   const [criterionWeighting, setCriterionWeighting] = useState<Weighting>("C");
-  const [bands, setBands] = useState<Record<BandCentre, number>>({
-    31.5: 106,
-    63: 115,
-    125: 111,
-    250: 96,
-  });
+  const [bands, setBands] = useState<Record<BandCentre, number>>({ 31.5: 106, 63: 115, 125: 111, 250: 96 });
 
   const result = useMemo(() => {
     const count = Math.max(1, Math.round(safePositive(sourceCount, 1)));
     const sourceGain = (sumMode === "coherent" ? 20 : 10) * Math.log10(count);
     const spread = propagationMode === "point" ? 20 : 10;
     const targetDistance = safePositive(receptorDistance, 1);
-    const refDistance = sourceMode === "power" ? 1 : safePositive(referenceDistance, 1);
+    const refDistance = analysisMode === "octave"
+      ? safePositive(referenceDistance, 1)
+      : sourceMode === "power"
+        ? 1
+        : safePositive(referenceDistance, 1);
     const distanceLoss = spread * Math.log10(Math.max(targetDistance / refDistance, 1e-6));
     const correction = sourceGain - distanceLoss - Math.max(0, directivityLoss) - Math.max(0, barrierLoss) + facadeCorrection;
 
-    const baseReference = sourceMode === "power"
-      ? sensitivity + 10 * Math.log10(safePositive(power, 1))
-      : referenceLevel;
+    const broadbandWeighting: Weighting = sourceMode === "power" ? "Z" : inputWeighting;
+    const baseReference = analysisMode === "octave"
+      ? dbSum(BAND_CENTRES.map((band) => bands[band]))
+      : sourceMode === "power"
+        ? sensitivity + 10 * Math.log10(safePositive(power, 1))
+        : referenceLevel;
     const broadband = baseReference + correction;
 
     const receptorBands = Object.fromEntries(
@@ -141,19 +127,12 @@ export function SubwooferNoiseCalculator() {
     const weighted = (weighting: Weighting) => dbSum(
       BAND_CENTRES.map((band) => receptorBands[band] + WEIGHTING[weighting][band]),
     );
+    const octaveOverall = { A: weighted("A"), C: weighted("C"), Z: weighted("Z") };
 
-    const octaveOverall = {
-      A: weighted("A"),
-      C: weighted("C"),
-      Z: weighted("Z"),
-    };
-
-    const activeWeighting = analysisMode === "broadband" ? inputWeighting : criterionWeighting;
+    const activeWeighting = analysisMode === "broadband" ? broadbandWeighting : criterionWeighting;
     const predicted = analysisMode === "broadband" ? broadband : octaveOverall[activeWeighting];
     const margin = predicted - criterion;
-    const requiredDistance = margin > 0
-      ? targetDistance * 10 ** (margin / spread)
-      : targetDistance;
+    const requiredDistance = margin > 0 ? targetDistance * 10 ** (margin / spread) : targetDistance;
 
     return {
       sourceGain,
@@ -162,6 +141,7 @@ export function SubwooferNoiseCalculator() {
       correction,
       baseReference,
       broadband,
+      broadbandWeighting,
       receptorBands,
       octaveOverall,
       activeWeighting,
@@ -172,29 +152,10 @@ export function SubwooferNoiseCalculator() {
       upper: predicted + Math.max(0, uncertainty),
       cMinusA: octaveOverall.C - octaveOverall.A,
     };
-  }, [
-    analysisMode,
-    sourceMode,
-    referenceLevel,
-    referenceDistance,
-    inputWeighting,
-    sensitivity,
-    power,
-    sourceCount,
-    sumMode,
-    receptorDistance,
-    propagationMode,
-    directivityLoss,
-    barrierLoss,
-    facadeCorrection,
-    uncertainty,
-    criterion,
-    criterionWeighting,
-    bands,
-  ]);
+  }, [analysisMode, sourceMode, referenceLevel, referenceDistance, inputWeighting, sensitivity, power, sourceCount, sumMode, receptorDistance, propagationMode, directivityLoss, barrierLoss, facadeCorrection, uncertainty, criterion, criterionWeighting, bands]);
 
   const chart = useMemo(() => {
-    const minDistance = Math.max(1, sourceMode === "power" ? 1 : safePositive(referenceDistance, 1));
+    const minDistance = Math.max(1, analysisMode === "octave" ? safePositive(referenceDistance, 1) : sourceMode === "power" ? 1 : safePositive(referenceDistance, 1));
     const maxDistance = Math.max(500, safePositive(receptorDistance, 100) * 2);
     const points = Array.from({ length: 42 }, (_, index) => {
       const t = index / 41;
@@ -208,8 +169,8 @@ export function SubwooferNoiseCalculator() {
     const x = (distance: number) => 44 + (Math.log10(distance / minDistance) / Math.log10(maxDistance / minDistance)) * 616;
     const y = (level: number) => 18 + ((yMax - level) / Math.max(1, yMax - yMin)) * 182;
     const path = points.map((point, index) => `${index ? "L" : "M"}${x(point.distance).toFixed(1)},${y(point.level).toFixed(1)}`).join(" ");
-    return { points, path, x, y, minDistance, maxDistance, yMin, yMax };
-  }, [result.predicted, result.spread, receptorDistance, referenceDistance, sourceMode, criterion]);
+    return { path, x, y, minDistance, maxDistance, yMin, yMax };
+  }, [analysisMode, result.predicted, result.spread, receptorDistance, referenceDistance, sourceMode, criterion]);
 
   const nearCriterion = Math.abs(result.margin) <= Math.max(0, uncertainty);
   const status = result.margin > 0 ? "over" : nearCriterion ? "near" : "under";
@@ -232,25 +193,14 @@ export function SubwooferNoiseCalculator() {
         <section className="sn-controls" aria-label="Calculator inputs">
           <div className="sn-panel">
             <div className="sn-panel-title">1. Analysis</div>
-            <SelectField
-              label="Input format"
-              value={analysisMode}
-              onChange={(value) => setAnalysisMode(value as AnalysisMode)}
-              options={[["broadband", "Broadband level"], ["octave", "Low-frequency octave bands"]]}
-              hint="Use octave bands when you have 31.5/63/125/250 Hz data and need A/C/Z-weighted totals."
-            />
+            <SelectField label="Input format" value={analysisMode} onChange={(value) => setAnalysisMode(value as AnalysisMode)} options={[["broadband", "Broadband level"], ["octave", "Low-frequency octave bands"]]} hint="Use octave bands when you have 31.5/63/125/250 Hz data and need A/C/Z-weighted totals." />
           </div>
 
           <div className="sn-panel">
             <div className="sn-panel-title">2. Source</div>
             {analysisMode === "broadband" ? (
               <>
-                <SelectField
-                  label="Source input"
-                  value={sourceMode}
-                  onChange={(value) => setSourceMode(value as SourceMode)}
-                  options={[["reference", "Known SPL at reference distance"], ["power", "Sensitivity + amplifier power"]]}
-                />
+                <SelectField label="Source input" value={sourceMode} onChange={(value) => setSourceMode(value as SourceMode)} options={[["reference", "Known SPL at reference distance"], ["power", "Sensitivity + amplifier power"]]} />
                 {sourceMode === "reference" ? (
                   <>
                     <NumericField label="Reference level" value={referenceLevel} onChange={setReferenceLevel} unit={`dB${inputWeighting}`} step={0.5} />
@@ -261,46 +211,24 @@ export function SubwooferNoiseCalculator() {
                   <>
                     <NumericField label="Sensitivity" value={sensitivity} onChange={setSensitivity} unit="dB @ 1W/1m" step={0.5} />
                     <NumericField label="Amplifier power" value={power} onChange={setPower} unit="W" min={1} step={50} hint="Simple electrical-power estimate. Real maximum SPL is limited by loudspeaker compression, DSP and manufacturer ratings." />
-                    <div className="sn-inline-note">Sensitivity + power is treated as an unweighted planning estimate; use a measured or manufacturer reference level where possible.</div>
+                    <div className="sn-inline-note">Sensitivity + power is treated as dBZ / flat. Use a measured or manufacturer reference level where possible.</div>
                   </>
                 )}
               </>
             ) : (
               <div className="sn-band-grid">
-                {BAND_CENTRES.map((band) => (
-                  <NumericField
-                    key={band}
-                    label={`${band} Hz`}
-                    value={bands[band]}
-                    onChange={(value) => setBands((current) => ({ ...current, [band]: value }))}
-                    unit="dB"
-                    step={0.5}
-                  />
-                ))}
+                {BAND_CENTRES.map((band) => <NumericField key={band} label={`${band} Hz`} value={bands[band]} onChange={(value) => setBands((current) => ({ ...current, [band]: value }))} unit="dB" step={0.5} />)}
                 <NumericField label="Reference distance" value={referenceDistance} onChange={setReferenceDistance} unit="m" min={0.1} step={0.1} />
               </div>
             )}
-
             <NumericField label="Number of identical subs" value={sourceCount} onChange={setSourceCount} min={1} step={1} />
-            <SelectField
-              label="Summation assumption"
-              value={sumMode}
-              onChange={(value) => setSumMode(value as SumMode)}
-              options={[["energy", "+10 log10(N), spatial / energy sum"], ["coherent", "+20 log10(N), coherent upper bound"]]}
-              hint="Real sub arrays interfere spatially. Use the coherent option only as a conservative on-axis upper bound, not as an array-model substitute."
-            />
+            <SelectField label="Summation assumption" value={sumMode} onChange={(value) => setSumMode(value as SumMode)} options={[["energy", "+10 log10(N), spatial / energy sum"], ["coherent", "+20 log10(N), coherent upper bound"]]} hint="Real sub arrays interfere spatially. Use the coherent option only as a conservative on-axis upper bound, not as an array-model substitute." />
           </div>
 
           <div className="sn-panel">
             <div className="sn-panel-title">3. Propagation to receptor</div>
             <NumericField label="Receptor distance" value={receptorDistance} onChange={setReceptorDistance} unit="m" min={0.1} step={1} />
-            <SelectField
-              label="Geometric spreading"
-              value={propagationMode}
-              onChange={(value) => setPropagationMode(value as PropagationMode)}
-              options={[["point", "Point-source far field · 6 dB / doubling"], ["line", "Cylindrical approximation · 3 dB / doubling"]]}
-              hint="The point-source model is the safer general screening default once the array is in its far field."
-            />
+            <SelectField label="Geometric spreading" value={propagationMode} onChange={(value) => setPropagationMode(value as PropagationMode)} options={[["point", "Point-source far field · 6 dB / doubling"], ["line", "Cylindrical approximation · 3 dB / doubling"]]} hint="The point-source model is the safer general screening default once the array is in its far field." />
             <NumericField label="Off-axis / array attenuation" value={directivityLoss} onChange={setDirectivityLoss} unit="dB" min={0} step={0.5} />
             <NumericField label="Barrier / ground attenuation" value={barrierLoss} onChange={setBarrierLoss} unit="dB" min={0} step={0.5} hint="Do not assume large low-frequency barrier benefit without project-specific evidence." />
             <NumericField label="Facade correction" value={facadeCorrection} onChange={setFacadeCorrection} unit="dB" step={0.5} hint="Enter 0 for free-field prediction; only add a facade correction when your criterion/assessment method requires it." />
@@ -310,39 +238,16 @@ export function SubwooferNoiseCalculator() {
           <div className="sn-panel">
             <div className="sn-panel-title">4. Screening criterion</div>
             <NumericField label="User-supplied criterion" value={criterion} onChange={setCriterion} unit={`dB${result.activeWeighting}`} step={0.5} />
-            <SelectField
-              label="Criterion weighting"
-              value={analysisMode === "broadband" ? inputWeighting : criterionWeighting}
-              onChange={(value) => setCriterionWeighting(value as Weighting)}
-              options={[["A", "dBA"], ["C", "dBC"], ["Z", "dBZ / flat"]]}
-              disabled={analysisMode === "broadband"}
-              hint={analysisMode === "broadband" ? "Broadband criteria must use the same weighting as the supplied broadband source level." : "Choose the metric specified by the permit, consent condition or acoustic report."}
-            />
+            <SelectField label="Criterion weighting" value={analysisMode === "broadband" ? result.broadbandWeighting : criterionWeighting} onChange={(value) => setCriterionWeighting(value as Weighting)} options={[["A", "dBA"], ["C", "dBC"], ["Z", "dBZ / flat"]]} disabled={analysisMode === "broadband"} hint={analysisMode === "broadband" ? "Broadband criteria must use the same weighting as the supplied broadband source level." : "Choose the metric specified by the permit, consent condition or acoustic report."} />
           </div>
         </section>
 
         <section className="sn-results" aria-live="polite">
           <div className="sn-result-grid">
-            <article className="sn-result-card sn-primary">
-              <span>Predicted receptor level</span>
-              <strong>{fmt(result.predicted)} dB{result.activeWeighting}</strong>
-              <small>{fmt(result.lower)}–{fmt(result.upper)} dB{result.activeWeighting} with entered uncertainty</small>
-            </article>
-            <article className={`sn-result-card sn-status ${status}`}>
-              <span>Criterion margin</span>
-              <strong>{result.margin >= 0 ? "+" : ""}{fmt(result.margin)} dB</strong>
-              <small>{status === "over" ? "Prediction is above the supplied criterion." : status === "near" ? "Prediction is within the uncertainty band of the criterion." : "Prediction is below the supplied criterion."}</small>
-            </article>
-            <article className="sn-result-card">
-              <span>Distance loss</span>
-              <strong>{fmt(result.distanceLoss)} dB</strong>
-              <small>{propagationMode === "point" ? "20 log10(r/r₀)" : "10 log10(r/r₀)"}</small>
-            </article>
-            <article className="sn-result-card">
-              <span>Source-count gain</span>
-              <strong>+{fmt(result.sourceGain)} dB</strong>
-              <small>{sumMode === "energy" ? "Energy / spatial sum assumption" : "Coherent upper-bound assumption"}</small>
-            </article>
+            <article className="sn-result-card sn-primary"><span>Predicted receptor level</span><strong>{fmt(result.predicted)} dB{result.activeWeighting}</strong><small>{fmt(result.lower)}–{fmt(result.upper)} dB{result.activeWeighting} with entered uncertainty</small></article>
+            <article className={`sn-result-card sn-status ${status}`}><span>Criterion margin</span><strong>{result.margin >= 0 ? "+" : ""}{fmt(result.margin)} dB</strong><small>{status === "over" ? "Prediction is above the supplied criterion." : status === "near" ? "Prediction is within the uncertainty band of the criterion." : "Prediction is below the supplied criterion."}</small></article>
+            <article className="sn-result-card"><span>Distance loss</span><strong>{fmt(result.distanceLoss)} dB</strong><small>{propagationMode === "point" ? "20 log10(r/r₀)" : "10 log10(r/r₀)"}</small></article>
+            <article className="sn-result-card"><span>Source-count gain</span><strong>+{fmt(result.sourceGain)} dB</strong><small>{sumMode === "energy" ? "Energy / spatial sum assumption" : "Coherent upper-bound assumption"}</small></article>
           </div>
 
           <div className="sn-panel sn-chart-panel">
@@ -357,8 +262,7 @@ export function SubwooferNoiseCalculator() {
               <line x1="44" y1={chart.y(criterion)} x2="660" y2={chart.y(criterion)} className="sn-criterion-line" />
               <path d={chart.path} className="sn-level-line" />
               <circle cx={chart.x(safePositive(receptorDistance, 1))} cy={chart.y(result.predicted)} r="4" className="sn-point" />
-              <text x="44" y="220">{fmt(chart.minDistance, 0)} m</text>
-              <text x="660" y="220" textAnchor="end">{fmt(chart.maxDistance, 0)} m</text>
+              <text x="44" y="220">{fmt(chart.minDistance, 0)} m</text><text x="660" y="220" textAnchor="end">{fmt(chart.maxDistance, 0)} m</text>
               <text x="652" y={Math.max(30, chart.y(criterion) - 5)} textAnchor="end" className="sn-criterion-label">criterion {fmt(criterion)} dB{result.activeWeighting}</text>
             </svg>
           </div>
@@ -368,20 +272,10 @@ export function SubwooferNoiseCalculator() {
               <div className="sn-panel-title">Low-frequency spectrum at receptor</div>
               <div className="sn-octave-table" role="table" aria-label="Octave band levels at receptor">
                 <div className="sn-octave-head" role="row"><span>Band</span><span>Level</span><span>A-weighted</span><span>C-weighted</span></div>
-                {BAND_CENTRES.map((band) => (
-                  <div className="sn-octave-row" role="row" key={band}>
-                    <span>{band} Hz</span>
-                    <strong>{fmt(result.receptorBands[band])}</strong>
-                    <span>{fmt(result.receptorBands[band] + WEIGHTING.A[band])}</span>
-                    <span>{fmt(result.receptorBands[band] + WEIGHTING.C[band])}</span>
-                  </div>
-                ))}
+                {BAND_CENTRES.map((band) => <div className="sn-octave-row" role="row" key={band}><span>{band} Hz</span><strong>{fmt(result.receptorBands[band])}</strong><span>{fmt(result.receptorBands[band] + WEIGHTING.A[band])}</span><span>{fmt(result.receptorBands[band] + WEIGHTING.C[band])}</span></div>)}
               </div>
               <div className="sn-weighted-totals">
-                <div><span>Overall A</span><strong>{fmt(result.octaveOverall.A)} dBA</strong></div>
-                <div><span>Overall C</span><strong>{fmt(result.octaveOverall.C)} dBC</strong></div>
-                <div><span>Overall Z</span><strong>{fmt(result.octaveOverall.Z)} dBZ</strong></div>
-                <div><span>C − A</span><strong>{fmt(result.cMinusA)} dB</strong></div>
+                <div><span>Overall A</span><strong>{fmt(result.octaveOverall.A)} dBA</strong></div><div><span>Overall C</span><strong>{fmt(result.octaveOverall.C)} dBC</strong></div><div><span>Overall Z</span><strong>{fmt(result.octaveOverall.Z)} dBZ</strong></div><div><span>C − A</span><strong>{fmt(result.cMinusA)} dB</strong></div>
               </div>
             </div>
           ) : null}
@@ -389,25 +283,12 @@ export function SubwooferNoiseCalculator() {
           <div className="sn-panel">
             <div className="sn-panel-title">Scenario readout</div>
             <dl className="sn-breakdown">
-              <div><dt>Reference source level</dt><dd>{fmt(result.baseReference)} dB</dd></div>
-              <div><dt>Source-count adjustment</dt><dd>+{fmt(result.sourceGain)} dB</dd></div>
-              <div><dt>Geometric spreading</dt><dd>−{fmt(result.distanceLoss)} dB</dd></div>
-              <div><dt>Off-axis / array attenuation</dt><dd>−{fmt(Math.max(0, directivityLoss))} dB</dd></div>
-              <div><dt>Barrier / ground attenuation</dt><dd>−{fmt(Math.max(0, barrierLoss))} dB</dd></div>
-              <div><dt>Facade correction</dt><dd>{facadeCorrection >= 0 ? "+" : ""}{fmt(facadeCorrection)} dB</dd></div>
+              <div><dt>Reference source level</dt><dd>{fmt(result.baseReference)} dB</dd></div><div><dt>Source-count adjustment</dt><dd>+{fmt(result.sourceGain)} dB</dd></div><div><dt>Geometric spreading</dt><dd>−{fmt(result.distanceLoss)} dB</dd></div><div><dt>Off-axis / array attenuation</dt><dd>−{fmt(Math.max(0, directivityLoss))} dB</dd></div><div><dt>Barrier / ground attenuation</dt><dd>−{fmt(Math.max(0, barrierLoss))} dB</dd></div><div><dt>Facade correction</dt><dd>{facadeCorrection >= 0 ? "+" : ""}{fmt(facadeCorrection)} dB</dd></div>
             </dl>
-            {result.margin > 0 ? (
-              <div className="sn-action-callout">
-                Under the selected spreading assumption and with all other corrections held constant, the receptor would need to be about <strong>{fmt(result.requiredDistance, 0)} m</strong> away to reach the entered criterion by distance alone.
-              </div>
-            ) : (
-              <div className="sn-action-callout safe">The central prediction is below the entered criterion. Keep the uncertainty range and local permit method in the decision.</div>
-            )}
+            {result.margin > 0 ? <div className="sn-action-callout">Under the selected spreading assumption and with all other corrections held constant, the receptor would need to be about <strong>{fmt(result.requiredDistance, 0)} m</strong> away to reach the entered criterion by distance alone.</div> : <div className="sn-action-callout safe">The central prediction is below the entered criterion. Keep the uncertainty range and local permit method in the decision.</div>}
           </div>
 
-          <div className="sn-method-note">
-            <strong>Method boundary:</strong> This calculator handles logarithmic source summation, geometric spreading, optional octave-band A/C/Z weighting and user-entered corrections. It deliberately does not pretend to model full ISO 9613-2 terrain/meteorology, phase/directivity lobes, diffraction, ground impedance or jurisdiction-specific penalties. Use the Array Planner for detailed system geometry and a project noise model / measurements for compliance work.
-          </div>
+          <div className="sn-method-note"><strong>Method boundary:</strong> This calculator handles logarithmic source summation, geometric spreading, optional octave-band A/C/Z weighting and user-entered corrections. It deliberately does not pretend to model full ISO 9613-2 terrain/meteorology, phase/directivity lobes, diffraction, ground impedance or jurisdiction-specific penalties. Use the Array Planner for detailed system geometry and a project noise model / measurements for compliance work.</div>
         </section>
       </div>
     </main>
