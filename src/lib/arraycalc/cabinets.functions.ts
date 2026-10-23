@@ -21,7 +21,7 @@ export const listUserCabinets = createServerFn({ method: "GET" })
 
 export const saveUserCabinet = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: UserCabinet) => data)
+  .validator((data: UserCabinet) => data)
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("user_cabinets").upsert(
       {
@@ -39,7 +39,7 @@ export const saveUserCabinet = createServerFn({ method: "POST" })
 
 export const deleteUserCabinet = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { key: string }) => data)
+  .validator((data: { key: string }) => data)
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("user_cabinets")
@@ -51,7 +51,7 @@ export const deleteUserCabinet = createServerFn({ method: "POST" })
 
 export const extractCabinetSpec = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: ExtractInput) => data)
+  .validator((data: ExtractInput) => data)
   .handler(async ({ data }) => {
     const { extractSpecFields } = await import("./cabinetSpec.server");
     return JSON.stringify(await extractSpecFields(data));
