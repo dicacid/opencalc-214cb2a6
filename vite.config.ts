@@ -12,4 +12,20 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Lovable's own builds pin LOVABLE_NITRO_PRESET (Cloudflare). Everywhere else,
+  // including Render, serve the Nitro node server so SSR and server functions run.
+  nitro: {
+    preset: "node-server",
+  },
+  vite: {
+    build: {
+      modulePreload: {
+        resolveDependencies(_filename, deps) {
+          // The subwoofer tab is a separate route chunk. Keep it off the
+          // initial HTML preload list until that tab is opened.
+          return deps.filter((dep) => !dep.includes("SubwooferNoise"));
+        },
+      },
+    },
+  },
 });

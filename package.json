@@ -3,11 +3,17 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "start": "node .output/server/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -45,9 +51,8 @@
     "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.101.1",
-    "@tanstack/react-router": "1.170.18",
-    "@tanstack/react-start": "1.168.32",
-    "@tanstack/router-plugin": "1.168.23",
+    "@tanstack/react-router": "1.170.45",
+    "@tanstack/react-start": "1.169.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -75,6 +80,7 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.14.0",
+    "@tanstack/router-plugin": "1.168.47",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -90,6 +96,19 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.2.0"
+    "vite": "^8.3.5"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2",
+    "launch-editor": "2.14.2",
+    "nanoid": "3.3.20",
+    "shell-quote": "1.12.0",
+    "source-map-js": "1.2.2",
+    "minimatch@3": {
+      "brace-expansion": "1.1.21"
+    },
+    "minimatch@10": {
+      "brace-expansion": "5.0.12"
+    }
   }
 }

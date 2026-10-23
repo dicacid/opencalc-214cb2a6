@@ -1,25 +1,15 @@
 import { useMemo, useState } from "react";
-
-type Weighting = "A" | "C" | "Z";
-type SourceMode = "reference" | "power";
-type SumMode = "energy" | "coherent";
-type PropagationMode = "point" | "line";
-type AnalysisMode = "broadband" | "octave";
-
-const BAND_CENTRES = [31.5, 63, 125, 250] as const;
-type BandCentre = (typeof BAND_CENTRES)[number];
-
-const WEIGHTING: Record<Weighting, Record<BandCentre, number>> = {
-  A: { 31.5: -39.4, 63: -26.2, 125: -16.1, 250: -8.6 },
-  C: { 31.5: -3.0, 63: -0.8, 125: -0.2, 250: 0.0 },
-  Z: { 31.5: 0, 63: 0, 125: 0, 250: 0 },
-};
-
-function dbSum(levels: number[]) {
-  const finite = levels.filter(Number.isFinite);
-  if (!finite.length) return Number.NaN;
-  return 10 * Math.log10(finite.reduce((sum, level) => sum + 10 ** (level / 10), 0));
-}
+import {
+  BAND_CENTRES,
+  WEIGHTING,
+  predictSubwooferNoise,
+  type AnalysisMode,
+  type BandCentre,
+  type PropagationMode,
+  type SourceMode,
+  type SumMode,
+  type Weighting,
+} from "@/lib/acoustics/subwooferNoise";
 
 function safePositive(value: number, fallback = 1) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -99,60 +89,49 @@ export function SubwooferNoiseCalculator() {
   const [criterionWeighting, setCriterionWeighting] = useState<Weighting>("C");
   const [bands, setBands] = useState<Record<BandCentre, number>>({ 31.5: 106, 63: 115, 125: 111, 250: 96 });
 
-  const result = useMemo(() => {
-    const count = Math.max(1, Math.round(safePositive(sourceCount, 1)));
-    const sourceGain = (sumMode === "coherent" ? 20 : 10) * Math.log10(count);
-    const spread = propagationMode === "point" ? 20 : 10;
-    const targetDistance = safePositive(receptorDistance, 1);
-    const refDistance = analysisMode === "octave"
-      ? safePositive(referenceDistance, 1)
-      : sourceMode === "power"
-        ? 1
-        : safePositive(referenceDistance, 1);
-    const distanceLoss = spread * Math.log10(Math.max(targetDistance / refDistance, 1e-6));
-    const correction = sourceGain - distanceLoss - Math.max(0, directivityLoss) - Math.max(0, barrierLoss) + facadeCorrection;
-
-    const broadbandWeighting: Weighting = sourceMode === "power" ? "Z" : inputWeighting;
-    const baseReference = analysisMode === "octave"
-      ? dbSum(BAND_CENTRES.map((band) => bands[band]))
-      : sourceMode === "power"
-        ? sensitivity + 10 * Math.log10(safePositive(power, 1))
-        : referenceLevel;
-    const broadband = baseReference + correction;
-
-    const receptorBands = Object.fromEntries(
-      BAND_CENTRES.map((band) => [band, bands[band] + correction]),
-    ) as Record<BandCentre, number>;
-
-    const weighted = (weighting: Weighting) => dbSum(
-      BAND_CENTRES.map((band) => receptorBands[band] + WEIGHTING[weighting][band]),
-    );
-    const octaveOverall = { A: weighted("A"), C: weighted("C"), Z: weighted("Z") };
-
-    const activeWeighting = analysisMode === "broadband" ? broadbandWeighting : criterionWeighting;
-    const predicted = analysisMode === "broadband" ? broadband : octaveOverall[activeWeighting];
-    const margin = predicted - criterion;
-    const requiredDistance = margin > 0 ? targetDistance * 10 ** (margin / spread) : targetDistance;
-
-    return {
-      sourceGain,
-      spread,
-      distanceLoss,
-      correction,
-      baseReference,
-      broadband,
-      broadbandWeighting,
-      receptorBands,
-      octaveOverall,
-      activeWeighting,
-      predicted,
-      margin,
-      requiredDistance,
-      lower: predicted - Math.max(0, uncertainty),
-      upper: predicted + Math.max(0, uncertainty),
-      cMinusA: octaveOverall.C - octaveOverall.A,
-    };
-  }, [analysisMode, sourceMode, referenceLevel, referenceDistance, inputWeighting, sensitivity, power, sourceCount, sumMode, receptorDistance, propagationMode, directivityLoss, barrierLoss, facadeCorrection, uncertainty, criterion, criterionWeighting, bands]);
+  const result = useMemo(
+    () =>
+      predictSubwooferNoise({
+        analysisMode,
+        sourceMode,
+        referenceLevel,
+        referenceDistance,
+        inputWeighting,
+        sensitivity,
+        power,
+        sourceCount,
+        sumMode,
+        receptorDistance,
+        propagationMode,
+        directivityLoss,
+        barrierLoss,
+        facadeCorrection,
+        uncertainty,
+        criterion,
+        criterionWeighting,
+        bands,
+      }),
+    [
+      analysisMode,
+      sourceMode,
+      referenceLevel,
+      referenceDistance,
+      inputWeighting,
+      sensitivity,
+      power,
+      sourceCount,
+      sumMode,
+      receptorDistance,
+      propagationMode,
+      directivityLoss,
+      barrierLoss,
+      facadeCorrection,
+      uncertainty,
+      criterion,
+      criterionWeighting,
+      bands,
+    ],
+  );
 
   const chart = useMemo(() => {
     const minDistance = Math.max(1, analysisMode === "octave" ? safePositive(referenceDistance, 1) : sourceMode === "power" ? 1 : safePositive(referenceDistance, 1));

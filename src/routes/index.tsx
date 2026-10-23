@@ -1,8 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { SubwooferNoiseCalculator } from "@/components/SubwooferNoiseCalculator";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import "@/styles/arraycalc.css";
 import "@/styles/subwoofer-noise.css";
+
+const SubwooferNoiseCalculator = lazy(() =>
+  import("@/components/SubwooferNoiseCalculator").then((module) => ({
+    default: module.SubwooferNoiseCalculator,
+  })),
+);
 
 const title = "Array Planner — line array, subwoofer SPL & noise planning";
 const description =
@@ -29,16 +34,19 @@ function Index() {
   const [tab, setTab] = useState<CalculatorTab>("array");
 
   useEffect(() => {
+    if (tab !== "array") return;
     const root = ref.current;
-    if (!root) return;
+    if (!root || root.dataset["booted"] === "1") return;
     let disposed = false;
     void import("@/lib/arraycalc/app").then(({ bootArrayCalc }) => {
-      if (!disposed && ref.current) bootArrayCalc(ref.current);
+      if (disposed || !ref.current || ref.current.dataset["booted"] === "1") return;
+      ref.current.dataset["booted"] = "1";
+      bootArrayCalc(ref.current);
     });
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [tab]);
 
   useEffect(() => {
     if (window.location.hash === "#subwoofer-noise") setTab("subwoofer-noise");
@@ -83,7 +91,11 @@ function Index() {
         style={{ display: tab === "array" ? undefined : "none" }}
         aria-hidden={tab !== "array"}
       />
-      {tab === "subwoofer-noise" ? <SubwooferNoiseCalculator /> : null}
+      {tab === "subwoofer-noise" ? (
+        <Suspense fallback={<p className="calc-brand">Loading subwoofer noise calculator…</p>}>
+          <SubwooferNoiseCalculator />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
